@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 
 const { PrismaClient } = require("@prisma/client");
 const { user } = new PrismaClient();
+const auth = require("./middleware/auth");
 
 app.use(express.json());
 
@@ -14,7 +15,7 @@ app.listen(5000, () => {
   console.log("OK");
 });
 
-app.get("/users", verifyJWT, (req, res) => {
+app.get("/users", auth, (req, res) => {
   res.status(200).send("Successfull Authorization");
 });
 
@@ -44,7 +45,7 @@ app.post("/login", async (req, res) => {
     }
     const u = userExist.username;
     const token = jwt.sign({ u }, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: 25,
+      expiresIn: 60,
     });
 
     const refreshToken = jwt.sign({ u }, process.env.REFRESH_TOKEN_SECRET);
@@ -96,15 +97,3 @@ app.post("/register", async (req, res) => {
     console.log(err);
   }
 });
-
-function verifyJWT(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (token == null) return res.status(401).send("ekanes malakia");
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user.username;
-    next();
-  });
-}
