@@ -15,11 +15,15 @@ app.listen(5000, () => {
 });
 
 app.get("/users", verifyJWT, (req, res) => {
-  res.status(200).send("successfull authorization");
+  res.status(200).send("Successfull Authorization");
 });
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
+
+  if (!(username && password)) {
+    res.status(400).send("All input is required");
+  }
 
   const userExist = await user.findFirst({
     where: { username },
@@ -31,49 +35,66 @@ app.post("/login", async (req, res) => {
   });
 
   if (!userExist) {
-    return res.status(401).send("ekanes malakia");
+    return res.status(401).send("Invalid Credentials");
   }
 
   bcrypt.compare(password, userExist.password, (error, response) => {
     if (error) {
-      res.status(401).send("ekanes malakia");
+      res.status(401).send("Invalid Credentials");
     }
-    const u = userExist;
-    const token = jwt.sign(u, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: 300,
+    const u = userExist.username;
+    const token = jwt.sign({ u }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: 25,
     });
 
-    res
-      .status(200)
-      .send({ id: userExist.id, username: userExist.username, token: token });
+    const refreshToken = jwt.sign({ u }, process.env.REFRESH_TOKEN_SECRET);
+
+    res.status(200).send({
+      id: userExist.id,
+      username: userExist.username,
+      token: token,
+      refreshToken,
+    });
   });
 });
 
 app.post("/register", async (req, res) => {
-  const hashedPass = await bcrypt.hash(req.body.password, 10);
-  const username = req.body.username;
-  //const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  const userExist = await user.findUnique({
-    where: { username },
-  });
+    if (!(username && password)) {
+      res.status(400).send("All input is required");
+    }
 
-  if (userExist) {
-    return res.status(409).send("ekanes malakia");
+    const oldUser = await user.findUnique({ where: { username } });
+
+    if (oldUser) {
+      return res.status(409).send("User Already Exist. Please Login");
+    }
+
+    const hashedPass = await bcrypt.hash(req.body.password, 10);
+
+    const newUser = await user.create({
+      data: {
+        username,
+        password: hashedPass,
+      },
+      select: {
+        id: true,
+        username: true,
+      },
+    });
+
+    const token = jwt.sign({ username }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: "2h",
+    });
+
+    newUser.token = token;
+
+    res.status(201).json(newUser);
+  } catch (err) {
+    console.log(err);
   }
-
-  const newUser = await user.create({
-    data: {
-      username,
-      password: hashedPass,
-    },
-    select: {
-      id: true,
-      username: true,
-    },
-  });
-
-  res.status(200).send(newUser);
 });
 
 function verifyJWT(req, res, next) {
@@ -83,7 +104,7 @@ function verifyJWT(req, res, next) {
   if (token == null) return res.status(401).send("ekanes malakia");
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
-    req.user = user;
+    req.user = user.username;
     next();
   });
 }
