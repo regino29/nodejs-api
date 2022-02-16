@@ -1,25 +1,10 @@
-require("dotenv").config();
-const express = require("express");
-const app = express();
-const bcrypt = require("bcrypt");
-
-const jwt = require("jsonwebtoken");
-
+const router = require("express").Router();
 const { PrismaClient } = require("@prisma/client");
 const { user } = new PrismaClient();
-const auth = require("./middleware/auth");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
-app.use(express.json());
-
-app.listen(5000, () => {
-  console.log("OK");
-});
-
-app.get("/users", auth, (req, res) => {
-  res.status(200).send("Successfull Authorization");
-});
-
-app.post("/login", async (req, res) => {
+router.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   if (!(username && password)) {
@@ -43,12 +28,15 @@ app.post("/login", async (req, res) => {
     if (error) {
       res.status(401).send("Invalid Credentials");
     }
-    const u = userExist.username;
-    const token = jwt.sign({ u }, process.env.ACCESS_TOKEN_SECRET, {
-      expiresIn: 60,
+    const username = userExist.username;
+    const token = jwt.sign({ username }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: "2h",
     });
 
-    const refreshToken = jwt.sign({ u }, process.env.REFRESH_TOKEN_SECRET);
+    const refreshToken = jwt.sign(
+      { username },
+      process.env.REFRESH_TOKEN_SECRET
+    );
 
     res.status(200).send({
       id: userExist.id,
@@ -59,7 +47,7 @@ app.post("/login", async (req, res) => {
   });
 });
 
-app.post("/register", async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -92,8 +80,10 @@ app.post("/register", async (req, res) => {
 
     newUser.token = token;
 
-    res.status(201).json(newUser);
+    res.status(201).send(newUser);
   } catch (err) {
     console.log(err);
   }
 });
+
+module.exports = router;
